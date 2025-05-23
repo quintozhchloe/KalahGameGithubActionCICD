@@ -1,0 +1,32 @@
+body {
+  font-family: 'Roboto', sans-serif;
+}
+
+.board {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pits {
+  display: flex;
+  justify-content: space-between;
+  width: 60%;
+}
+
+.pit, .store {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 60px;
+  height: 60px;
+  background-color: #ccc;
+  margin: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pit:hover, .store:hover {
+  background-color: #bbb;
+}
