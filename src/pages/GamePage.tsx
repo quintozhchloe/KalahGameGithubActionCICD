@@ -26,25 +26,25 @@ const GamePage: React.FC<{ password?: string }> = ({ password }) => {
   const isAIPlayer = JSON.parse(sessionStorage.getItem('isAIPlayer') || 'false');
   const [startTime, setStartTime] = useState<number>(Date.now());
 
-  const isMoveValid = (pitIndex: number) => {
-    return (gameState.currentPlayer === 0 && pitIndex < 6 && gameState.pits[pitIndex] > 0) ||
-           (gameState.currentPlayer === 1 && pitIndex > 6 && pitIndex < 13 && gameState.pits[pitIndex] > 0);
-  };
-
-  const isGameOver = (gameState: GameState) => {
+  const isGameOver = useCallback((gameState: GameState) => {
     const player1Empty = gameState.pits.slice(0, 6).every(pit => pit === 0);
     const player2Empty = gameState.pits.slice(7, 13).every(pit => pit === 0);
     return player1Empty || player2Empty;
-  };
+  }, []);
 
-  const updateLeaderboard = async (name: string, score: number, duration: number, avatar: string) => {
+  const isMoveValid = useCallback((pitIndex: number) => {
+    return (gameState.currentPlayer === 0 && pitIndex < 6 && gameState.pits[pitIndex] > 0) ||
+           (gameState.currentPlayer === 1 && pitIndex > 6 && pitIndex < 13 && gameState.pits[pitIndex] > 0);
+  }, [gameState]);
+
+  const updateLeaderboard = useCallback(async (name: string, score: number, duration: number, avatar: string) => {
     const newEntry = { playerName: name, score, duration, avatar };
     try {
       await axios.post(`${apiBaseUrl}/leaderboard`, newEntry);
     } catch (error) {
       console.error('Error updating leaderboard:', error);
     }
-  };
+  }, []);
 
   const handlePitClick = useCallback((pitIndex: number) => {
     if (isMoveValid(pitIndex) && !gameOver) {
@@ -104,7 +104,7 @@ const GamePage: React.FC<{ password?: string }> = ({ password }) => {
         setGameState(finalGameState);
       }
     }
-  }, [gameState, gameOver, startTime, isMoveValid, setGameOver, setGameState, setNotification, setWinner, updateLeaderboard]);
+  }, [gameState, gameOver, startTime, isMoveValid, isGameOver, updateLeaderboard]);
 
   useEffect(() => {
     if (isAIPlayer && gameState.currentPlayer === 1 && !gameOver) {
