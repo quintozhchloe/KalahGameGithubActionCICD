@@ -1,4 +1,4 @@
-import React, { useState, useEffect,useCallback  } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Typography, Button, Avatar, Grid, Dialog, DialogTitle, DialogContent, DialogActions, Card, CardHeader } from '@mui/material';
 import Board from '../components/Board';
 import Leaderboard from '../components/Leaderboard';
@@ -26,15 +26,25 @@ const GamePage: React.FC<{ password?: string }> = ({ password }) => {
   const isAIPlayer = JSON.parse(sessionStorage.getItem('isAIPlayer') || 'false');
   const [startTime, setStartTime] = useState<number>(Date.now());
 
-  useEffect(() => {
-    if (isAIPlayer && gameState.currentPlayer === 1 && !gameOver) {
-      const validMoves = gameState.pits.slice(7, 13).map((seeds, index) => (seeds > 0 ? index + 7 : -1)).filter(index => index !== -1);
-      if (validMoves.length > 0) {
-        const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
-        setTimeout(() => handlePitClick(randomMove), 1000); //AI
-      }
+  const isMoveValid = (pitIndex: number) => {
+    return (gameState.currentPlayer === 0 && pitIndex < 6 && gameState.pits[pitIndex] > 0) ||
+           (gameState.currentPlayer === 1 && pitIndex > 6 && pitIndex < 13 && gameState.pits[pitIndex] > 0);
+  };
+
+  const isGameOver = (gameState: GameState) => {
+    const player1Empty = gameState.pits.slice(0, 6).every(pit => pit === 0);
+    const player2Empty = gameState.pits.slice(7, 13).every(pit => pit === 0);
+    return player1Empty || player2Empty;
+  };
+
+  const updateLeaderboard = async (name: string, score: number, duration: number, avatar: string) => {
+    const newEntry = { playerName: name, score, duration, avatar };
+    try {
+      await axios.post(`${apiBaseUrl}/leaderboard`, newEntry);
+    } catch (error) {
+      console.error('Error updating leaderboard:', error);
     }
-  }, [gameState, isAIPlayer, gameOver]);
+  };
 
   const handlePitClick = useCallback((pitIndex: number) => {
     if (isMoveValid(pitIndex) && !gameOver) {
@@ -94,18 +104,17 @@ const GamePage: React.FC<{ password?: string }> = ({ password }) => {
         setGameState(finalGameState);
       }
     }
-  }, [gameState, gameOver, startTime]);
+  }, [gameState, gameOver, startTime, isMoveValid, setGameOver, setGameState, setNotification, setWinner, updateLeaderboard]);
 
-  const isMoveValid = (pitIndex: number) => {
-    return (gameState.currentPlayer === 0 && pitIndex < 6 && gameState.pits[pitIndex] > 0) ||
-           (gameState.currentPlayer === 1 && pitIndex > 6 && pitIndex < 13 && gameState.pits[pitIndex] > 0);
-  };
-
-  const isGameOver = (gameState: GameState) => {
-    const player1Empty = gameState.pits.slice(0, 6).every(pit => pit === 0);
-    const player2Empty = gameState.pits.slice(7, 13).every(pit => pit === 0);
-    return player1Empty || player2Empty;
-  };
+  useEffect(() => {
+    if (isAIPlayer && gameState.currentPlayer === 1 && !gameOver) {
+      const validMoves = gameState.pits.slice(7, 13).map((seeds, index) => (seeds > 0 ? index + 7 : -1)).filter(index => index !== -1);
+      if (validMoves.length > 0) {
+        const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+        setTimeout(() => handlePitClick(randomMove), 1000); //AI
+      }
+    }
+  }, [gameState, isAIPlayer, gameOver, handlePitClick]);
 
   const restartGame = () => {
     setGameState(getInitialGameState());
@@ -113,15 +122,6 @@ const GamePage: React.FC<{ password?: string }> = ({ password }) => {
     setGameOver(false);
     setWinner(null);
     setStartTime(Date.now());
-  };
-
-  const updateLeaderboard = async (name: string, score: number, duration: number, avatar: string) => {
-    const newEntry = { playerName: name, score, duration, avatar };
-    try {
-      await axios.post( `${apiBaseUrl}/leaderboard`, newEntry);
-    } catch (error) {
-      console.error('Error updating leaderboard:', error);
-    }
   };
 
   return (
