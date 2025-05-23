@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useCallback  } from 'react';
 import { Box, Typography, Button, Avatar, Grid, Dialog, DialogTitle, DialogContent, DialogActions, Card, CardHeader } from '@mui/material';
 import Board from '../components/Board';
 import Leaderboard from '../components/Leaderboard';
@@ -94,7 +94,7 @@ const GamePage: React.FC<{ password?: string }> = ({ password }) => {
         setGameState(finalGameState);
       }
     }
-  });
+  }, [gameState, gameOver, startTime]);
 
   const isMoveValid = (pitIndex: number) => {
     return (gameState.currentPlayer === 0 && pitIndex < 6 && gameState.pits[pitIndex] > 0) ||
