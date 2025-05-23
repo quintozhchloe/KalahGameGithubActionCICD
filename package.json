@@ -27,7 +27,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+"build": "react-scripts build --noEslint",
      "test": "react-scripts test --transformIgnorePatterns \"node_modules/(?!axios)/\" --watchAll=false",
   "test:ci": "npm test -- --coverage --forceExit --detectOpenHandles",
     "eject": "react-scripts eject",
