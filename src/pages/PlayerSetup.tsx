@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, TextField, Typography, Avatar, Grid, Dialog, DialogContent, DialogTitle, Card, CardContent, CardHeader, IconButton } from '@mui/material';
 import AvatarSelection from './AvatarSelection';
 import AnnouncementPanel from '../components/AnnouncementPanel';
-import MatchingDialog from '../components/MatchingDialog';
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
@@ -24,7 +23,6 @@ const PlayerSetup: React.FC = () => {
   const [showSelectionDialog, setShowSelectionDialog] = useState(false);
   const [currentPlayer, setCurrentPlayer] = useState<'player1' | 'player2' | null>(null);
   const [startingSeeds, setStartingSeeds] = useState(4);
-  const [isMatching, setIsMatching] = useState(false);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const navigate = useNavigate();
 

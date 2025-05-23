@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Box, Typography, Card, Divider, Button } from '@mui/material';
+import { Box, Typography, Card, Divider} from '@mui/material';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
@@ -26,17 +26,6 @@ const Leaderboard: React.FC = () => {
     }
   };
 
-  const addEntry = async (entry: PlayerScore) => {
-    try {
-      await axios.post(`${API_URL}/leaderboard`, entry);
-      fetchLeaderboard(); //refresh the list
-    } catch (error) {
-      console.error('Error adding entry:', error);
-    }
-  };
-
-  
-  
 
   return (
     <Card sx={{ mt: 3, p: 2, maxWidth: 1100, mx: 'auto', border: '2px solid white' }}>

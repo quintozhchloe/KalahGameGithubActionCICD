@@ -36,7 +36,7 @@ const GamePage: React.FC<{ password?: string }> = ({ password }) => {
     }
   }, [gameState, isAIPlayer, gameOver]);
 
-  const handlePitClick = (pitIndex: number) => {
+  const handlePitClick = useCallback((pitIndex: number) => {
     if (isMoveValid(pitIndex) && !gameOver) {
       const newGameState = { ...gameState };
       let seeds = newGameState.pits[pitIndex];
@@ -94,7 +94,7 @@ const GamePage: React.FC<{ password?: string }> = ({ password }) => {
         setGameState(finalGameState);
       }
     }
-  };
+  });
 
   const isMoveValid = (pitIndex: number) => {
     return (gameState.currentPlayer === 0 && pitIndex < 6 && gameState.pits[pitIndex] > 0) ||
