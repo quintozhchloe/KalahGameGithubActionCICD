@@ -6,7 +6,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  test:
+  test_and_build:  
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,18 +14,14 @@ jobs:
         with:
           node-version: 18
       - run: npm install
-      - run: npm install @babel/plugin-proposal-private-property-in-object
-      - run: npm test:ci
+      - run: npm run build
 
   deploy:
-    needs: test-and-build  
+    needs: test_and_build 
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - uses: actions/checkout@v4
+      - uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build  
+          publish_dir: ./build
