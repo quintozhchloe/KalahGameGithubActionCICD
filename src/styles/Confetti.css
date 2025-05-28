@@ -1,0 +1,49 @@
+.confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.confetti {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: #f00;
+  opacity: 0.7;
+  animation: fall 5s linear forwards;
+}
+
+@keyframes fall {
+  0% {
+    transform: translateY(-100px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* 不同颜色的纸屑 */
+.confetti:nth-child(5n+1) { background-color: #f00; }
+.confetti:nth-child(5n+2) { background-color: #0f0; }
+.confetti:nth-child(5n+3) { background-color: #00f; }
+.confetti:nth-child(5n+4) { background-color: #ff0; }
+.confetti:nth-child(5n+5) { background-color: #0ff; }
+
+/* 不同形状的纸屑 */
+.confetti:nth-child(3n+1) { border-radius: 0; }
+.confetti:nth-child(3n+2) { border-radius: 50%; }
+.confetti:nth-child(3n+3) { 
+  width: 0;
+  height: 0;
+  background-color: transparent;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 10px solid #f0f;
+}

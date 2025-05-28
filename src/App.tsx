@@ -1,24 +1,76 @@
-import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import { Box } from '@mui/material';
+import React, { ReactNode } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import { CssBaseline } from '@mui/material';
+import theme from './theme';
+import { AuthProvider, useAuth } from './authContext';
 import HomePage from './pages/HomePage';
-import GamePage from './pages/GamePage';
+import AuthPage from './pages/AuthPage';
 import PlayerSetup from './pages/PlayerSetup';
-import AdminAnnouncements from './pages/AdminAnnouncements'; // 确保路径正确
+import GamePage from './pages/GamePage';
+import ProfilePage from './pages/ProfilePage';
 
-const App: React.FC = () => {
-  return (
-    <Box sx={{ bgcolor: 'background.default', minHeight: '100vh' }}>
-      <Router>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/game" element={<GamePage />} />
-          <Route path="/setup" element={<PlayerSetup />} />
-          <Route path="/admin-announcements" element={<AdminAnnouncements />} />
-        </Routes>
-      </Router>
-    </Box>
-  );
+// 受保护的路由组件
+interface ProtectedRouteProps {
+  children: ReactNode;
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { user } = useAuth();
+  
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return <>{children}</>;
 };
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/login" element={<AuthPage />} />
+      <Route 
+        path="/PlayerSetup" 
+        element={
+          <ProtectedRoute>
+            <PlayerSetup />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/game" 
+        element={
+          <ProtectedRoute>
+            <GamePage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/profile" 
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        } 
+      />
+      {/* 添加404页面 */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
+        <Router>
+          <AppRoutes />
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
+  );
+}
 
 export default App;

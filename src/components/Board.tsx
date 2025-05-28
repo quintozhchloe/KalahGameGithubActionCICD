@@ -1,5 +1,6 @@
-import React from 'react';
-import { Box, Grid, Typography } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Box, Typography, Grid } from '@mui/material';
+import { getAssetPath, checkAssetExists } from '../utils/assetUtils';
 import { GameState } from '../types';
 
 interface BoardProps {
@@ -8,8 +9,17 @@ interface BoardProps {
 }
 
 const Board: React.FC<BoardProps> = ({ gameState, onPitClick }) => {
+  const [woodenBgLoaded, setWoodenBgLoaded] = useState(false);
+  
+  useEffect(() => {
+    // 检查木质背景图片是否存在
+    checkAssetExists('wooden.png').then(exists => {
+      setWoodenBgLoaded(exists);
+    });
+  }, []);
+
   const renderPits = (start: number, end: number) => {
-    return gameState.pits.slice(start, end).map((seeds, index) => (
+    return gameState.pits.slice(start, end).map((seeds: number, index: number) => (
       <Box 
         key={index} 
         className="pit" 
@@ -43,21 +53,33 @@ const Board: React.FC<BoardProps> = ({ gameState, onPitClick }) => {
   };
 
   return (
-    <Box sx={{ height: '350px', position: 'relative' }}>
-      <Typography
-        sx={{
-          position: 'absolute',
-          top: '10px',
-          width: '100%',
-          textAlign: 'center',
-          fontSize: { xs: '18px', sm: '22px', md: '24px' }, 
-          fontWeight: 'bold',
-          color: 'black'
+    <Box sx={{ textAlign: 'center', p: 2 }}>
+      <Typography 
+        variant="h6" 
+        sx={{ 
+          mb: 2, 
+          fontFamily: '"Press Start 2P", cursive', 
+          fontSize: { xs: '0.8rem', sm: '1rem', md: '1.2rem' } 
         }}
       >
         {gameState.currentPlayer === 0 ? "Player 1's turn" : "Player 2's turn"}
       </Typography>
-      <Grid container justifyContent="center" alignItems="center" sx={{ backgroundColor: 'transparent', height: '100%' }}>
+      <Grid 
+        container 
+        justifyContent="center" 
+        alignItems="center" 
+        sx={{ 
+          backgroundColor: woodenBgLoaded ? 'transparent' : '#8B4513', // 备用背景色
+          height: '100%',
+          backgroundImage: woodenBgLoaded 
+            ? `url(${getAssetPath('wooden.png')})` 
+            : 'none',
+          backgroundSize: 'cover',
+          backgroundRepeat: 'no-repeat',
+          borderRadius: '10px',
+          padding: '10px'
+        }}
+      >
         <Grid item xs={1}>
           <Box 
             className="store" 

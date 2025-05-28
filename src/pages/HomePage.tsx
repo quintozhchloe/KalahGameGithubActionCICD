@@ -1,37 +1,70 @@
 import React from 'react';
 import { Box, Button, Typography, Card, CardContent } from '@mui/material';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../authContext';
 import '../styles/HomePage.css'; 
 
 const HomePage: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handlePlayClick = () => {
+    if (user) {
+      navigate('/PlayerSetup'); // Corrected route path
+    } else {
+      navigate('/login');
+    }
+  };
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', textAlign: 'center', p: 3, background: 'linear-gradient(to bottom right, #00ff00, #0000ff)' }}>
-      <Card sx={{ maxWidth: 800, p: 3 }}>
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      minHeight: '100vh', 
+      p: 3, 
+      background: 'linear-gradient(to bottom right, #00ff00, #0000ff)' 
+    }}>
+      <Typography variant="h2" gutterBottom sx={{ fontFamily: '"Press Start 2P", cursive', color: 'white', textShadow: '2px 2px 4px #000' }}>
+        Kalah Game
+      </Typography>
+      
+      <Card sx={{ maxWidth: 800, width: '100%', mb: 4, borderRadius: 4, boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
         <CardContent>
-          <img src="/assets/title.png" alt="Kalah Title" style={{ maxWidth: '100%' }} />
-          <Typography variant="h2" gutterBottom>Kalah - description</Typography>
-          <Typography variant="body1" paragraph align="left">
-            Kalah is a well-known board game, also known under the names Mancala, Warri or Kalaha. It is a strategic board game in which two players compete against each other. The aim of the game is to get as many stones (usually pebbles or beans) as possible into your collection area. The game originally comes from Africa and has been played in many countries around the world for centuries.
+          <Typography variant="h5" gutterBottom sx={{ fontFamily: '"Press Start 2P", cursive' }}>
+            How to Play
           </Typography>
-          <Typography variant="h4" gutterBottom>Kalah rules</Typography>
-          <Typography variant="h6" gutterBottom>Bonus round</Typography>
-          <Typography variant="body1" paragraph align="left">
-            If the last stone is dropped into an empty pool on the friendly side, the player gets one more turn. However, if the last stone falls into a pit that already contains stones, the player's turn ends.
+          <Typography variant="body1" paragraph>
+            Kalah is an ancient board game from the Mancala family. The game is played on a board with 14 pits - 6 small pits on each side and 2 larger pits (called Kalah or stores) at each end.
           </Typography>
-          <Typography variant="h6" gutterBottom>Victory! (Steal marble from your opponent)</Typography>
-          <Typography variant="body1" paragraph align="left">
-            If the last stone falls into a pit that is on your side and that contains exactly one stone, both the stone from the pit and the last stone from the opponent's pool are taken and placed in your own pool. This is referred to as "victory".
+          <Typography variant="body1" paragraph>
+            At the start of the game, each of the 12 small pits contains 4 stones. The objective is to capture more stones than your opponent.
           </Typography>
-          <Typography variant="h6" gutterBottom>Game end</Typography>
-          <Typography variant="body1" paragraph align="left">
+          <Typography variant="body1">
             The game ends when one of the players runs out of stones in their pits or has no more possibility to draw stones. The player with the most stones in their bucket wins the game.
           </Typography>
         </CardContent>
       </Card>
       <Box sx={{ mt: 3 }}>
-        <Link to="/setup">
-          <Button variant="contained" color="success" sx={{ px: 5, py: 1 }}>Play</Button>
-        </Link>
+        <Button 
+          variant="contained" 
+          color="success" 
+          sx={{ px: 5, py: 1 }}
+          onClick={handlePlayClick}
+        >
+          {user ? 'Play' : 'Login to Play'}
+        </Button>
+        {user && (
+          <Button 
+            variant="contained" 
+            color="primary" 
+            sx={{ px: 5, py: 1, ml: 2 }}
+            onClick={() => navigate('/profile')}
+          >
+            My Profile
+          </Button>
+        )}
       </Box>
     </Box>
   );

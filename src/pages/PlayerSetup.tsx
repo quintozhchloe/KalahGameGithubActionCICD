@@ -1,183 +1,385 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Box, Typography, Button, Avatar, Card, CardContent, Grid, TextField, CircularProgress, Snackbar, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Box, Button, TextField, Typography, Avatar, Grid, Dialog, DialogContent, DialogTitle, Card, CardContent, CardHeader, IconButton } from '@mui/material';
-import AvatarSelection from './AvatarSelection';
-import AnnouncementPanel from '../components/AnnouncementPanel';
-import axios from 'axios';
+import { useAuth } from '../authContext';
+import axios from '../api';
+import SafeAvatar from '../components/SafeAvatar';
+import { getFullImageUrl } from '../utils/imageUtils';
+import { gameSocket } from '../services/socket';
 
-const API_URL = process.env.REACT_APP_API_URL || '';
-const apiBaseUrl = API_URL;
+const apiBaseUrl = process.env.REACT_APP_API_URL || '';
 
-interface Announcement {
-  id: string;
-  content: string;
-  date: string;
+interface MatchmakingUIProps {
+  status: 'idle' | 'searching' | 'matched';
+  countdown: number;
+  handleFindMatch: () => void;
 }
 
+const MatchmakingUI: React.FC<MatchmakingUIProps> = ({ status, countdown, handleFindMatch }) => {
+  return (
+    <Box sx={{ mt: 3, textAlign: 'center' }}>
+      {status === 'idle' && (
+        <Button 
+          variant="contained" 
+          color="primary" 
+          onClick={handleFindMatch}
+          sx={{ px: 4, py: 1.5, fontSize: '1.2rem', fontFamily: '"Press Start 2P", cursive' }}
+        >
+          Find Match
+        </Button>
+      )}
+      
+      {status === 'searching' && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <CircularProgress size={60} sx={{ mb: 2 }} />
+          <Typography variant="h6" sx={{ fontFamily: '"Press Start 2P", cursive' }}>
+            Searching for opponent...
+          </Typography>
+          <Typography variant="body1" sx={{ mt: 1, fontFamily: '"Press Start 2P", cursive' }}>
+            {countdown > 0 ? `Timeout in ${countdown}s` : 'Still searching...'}
+          </Typography>
+        </Box>
+      )}
+      
+      {status === 'matched' && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Typography variant="h6" sx={{ fontFamily: '"Press Start 2P", cursive', color: 'green' }}>
+            Match found!
+          </Typography>
+          <CircularProgress size={40} sx={{ mt: 2 }} />
+          <Typography variant="body1" sx={{ mt: 1, fontFamily: '"Press Start 2P", cursive' }}>
+            Preparing game...
+          </Typography>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
 const PlayerSetup: React.FC = () => {
-  const [player1Name, setPlayer1Name] = useState('Lucky');
-  const [player2Name, setPlayer2Name] = useState('');
-  const [player1Avatar, setPlayer1Avatar] = useState('/assets/1.png');
-  const [player2Avatar, setPlayer2Avatar] = useState('/assets/2.png');
-  const [isAIPlayer, setIsAIPlayer] = useState(false);
-  const [showSelectionDialog, setShowSelectionDialog] = useState(false);
-  const [currentPlayer, setCurrentPlayer] = useState<'player1' | 'player2' | null>(null);
-  const [startingSeeds, setStartingSeeds] = useState(4);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const { user, fetchUser } = useAuth();
+  const [avatar, setAvatar] = useState<string>(user?.avatar || '/assets/1.png');
+  const [status, setStatus] = useState<'idle' | 'searching' | 'matched'>('idle');
+  const [countdown, setCountdown] = useState<number>(30);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string>('');
+  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [openSnackbar, setOpenSnackbar] = useState<boolean>(false);
   const navigate = useNavigate();
 
+  // 当用户对象更新时，更新头像状态
   useEffect(() => {
-    fetchAnnouncements();
-  }, []);
+    if (user && user.avatar) {
+      setAvatar(user.avatar);
+    }
+  }, [user]);
 
-  const fetchAnnouncements = async () => {
+  useEffect(() => {
+    // Redirect to login if not authenticated
+    if (!user) {
+      navigate('/login');
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (status === 'searching' && countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown(prev => prev - 1);
+      }, 1000);
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [status, countdown]);
+
+  useEffect(() => {
+    if (countdown === 0) {
+      if (socket) {
+        socket.close();
+      }
+      
+      // 提示用户是否要与AI对战
+      const playWithAI = window.confirm('No opponent found. Would you like to play against AI?');
+      
+      if (playWithAI) {
+        // 设置AI对手信息
+        sessionStorage.setItem('playerRole', 'player1');
+        sessionStorage.setItem('player1Name', user?.username || 'Player');
+        sessionStorage.setItem('player2Name', 'AI Opponent');
+        sessionStorage.setItem('player1Avatar', avatar);
+        sessionStorage.setItem('player2Avatar', '/assets/robot.png'); // AI头像
+        sessionStorage.setItem('isAIPlayer', 'true');
+        
+        // 导航到游戏页面
+        navigate('/game');
+      } else {
+        setStatus('idle');
+        setCountdown(30);
+      }
+    }
+  }, [countdown, socket, navigate, user, avatar]);
+
+  const handleFindMatch = () => {
+    setStatus('searching');
+    
+    // 关闭之前的连接（如果存在）
+    if (socket) {
+      socket.close();
+    }
+    
+    console.log('Connecting to matchmaking server...');
+    const ws = new WebSocket('ws://localhost:8080');
+    setSocket(ws);
+
+    ws.onopen = () => {
+      console.log('Connected to matchmaking server');
+      // Send player info to server
+      const playerData = {
+        type: 'FIND_MATCH',
+        player: {
+          name: user?.username || 'Player',
+          avatar: avatar,
+          id: user?.id || Date.now().toString() // 添加唯一ID
+        }
+      };
+      console.log('Sending player data:', playerData);
+      ws.send(JSON.stringify(playerData));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('Received message from server:', data);
+
+        if (data.type === 'connected') {
+          console.log('Connection confirmed with ID:', data.id);
+        }
+
+        if (data.type === 'WAITING') {
+          console.log('Waiting for another player...');
+          // 可以添加UI提示
+        }
+
+        if (data.type === 'MATCH_FOUND') {
+          console.log('Match found! You are:', data.role);
+          console.log('Opponent:', data.opponent);
+          console.log('Game ID:', data.gameId); // 添加日志
+          
+          setStatus('matched');
+          
+          // 存储游戏ID
+          sessionStorage.setItem('gameId', data.gameId);
+          
+          // Store opponent info
+          sessionStorage.setItem('playerRole', data.role);
+          sessionStorage.setItem('player1Name', data.role === 'player1' ? user?.username || 'Player' : data.opponent.name);
+          sessionStorage.setItem('player2Name', data.role === 'player2' ? user?.username || 'Player' : data.opponent.name);
+          sessionStorage.setItem('player1Avatar', data.role === 'player1' ? avatar : data.opponent.avatar);
+          sessionStorage.setItem('player2Avatar', data.role === 'player2' ? avatar : data.opponent.avatar);
+          sessionStorage.setItem('isAIPlayer', 'false'); // 确保设置为人类对手
+          
+          // Navigate to game after a short delay
+          setTimeout(() => {
+            console.log('Navigating to game page...');
+            navigate('/game');
+          }, 1500);
+        }
+      } catch (error) {
+        console.error('Error parsing message:', error);
+      }
+    };
+
+    ws.onclose = (event) => {
+      console.log('Disconnected from server:', event.code, event.reason);
+      // 如果不是正常关闭，可能需要重新连接或显示错误
+      if (event.code !== 1000) {
+        setStatus('idle');
+        setCountdown(30);
+        alert('Connection to matchmaking server lost. Please try again.');
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+      setStatus('idle');
+      setCountdown(30);
+      alert('Error connecting to matchmaking server. Please try again later.');
+    };
+  };
+
+  const handleAvatarClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('File size exceeds 5MB limit');
+      setOpenSnackbar(true);
+      return;
+    }
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Only image files are allowed');
+      setOpenSnackbar(true);
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError('');
+
     try {
-      const response = await axios.get(`${apiBaseUrl}/announcements`);
-      setAnnouncements(response.data);
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      // Upload avatar to server
+      const response = await axios.post(`${apiBaseUrl}/users/upload-avatar`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      console.log('Avatar upload response:', response.data);
+
+      // Update avatar state with the URL returned from server
+      const fullAvatarUrl = getFullImageUrl(response.data.avatar_url);
+      console.log('Setting new avatar URL:', fullAvatarUrl);
+      
+      setAvatar(fullAvatarUrl);
+      
+      // Update user context
+      if (user) {
+        user.avatar = fullAvatarUrl;
+      }
+      
+      // 刷新用户信息以确保头像更新
+      if (fetchUser) {
+        await fetchUser();
+      }
+      
+      // 显示成功消息
+      setSuccessMessage('Avatar uploaded successfully!');
+      setOpenSnackbar(true);
     } catch (error) {
-      console.error('Error fetching announcements:', error);
+      console.error('Error uploading avatar:', error);
+      setUploadError('Failed to upload avatar. Please try again.');
+      setOpenSnackbar(true);
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const handleStartGame = () => {
-    sessionStorage.setItem('player1Name', player1Name);
-    sessionStorage.setItem('player2Name', player2Name);
-    sessionStorage.setItem('player1Avatar', player1Avatar);
-    sessionStorage.setItem('player2Avatar', player2Avatar);
-    sessionStorage.setItem('isAIPlayer', JSON.stringify(isAIPlayer));
-    sessionStorage.setItem('startingSeeds', startingSeeds.toString());
-    navigate('/game');
-    window.location.reload();
+  const handleCloseSnackbar = () => {
+    setOpenSnackbar(false);
   };
 
-  const handleAvatarSelect = (avatar: string) => {
-    if (currentPlayer === 'player1') {
-      setPlayer1Avatar(avatar);
-    } else if (currentPlayer === 'player2') {
-      setPlayer2Avatar(avatar);
-    }
-    setShowSelectionDialog(false);
-  };
-
-  const handlePlayerTypeSelect = (type: 'bot' | 'local') => {
-    if (type === 'bot') {
-      setIsAIPlayer(true);
-      setPlayer2Name('Robot');
-    } else {
-      setIsAIPlayer(false);
-      setPlayer2Name('');
-    }
-    setShowSelectionDialog(false);
-  };
-
-  const generateRandomName = () => {
-    const randomLetter = String.fromCharCode(65 + Math.floor(Math.random() * 26)); 
-    setPlayer2Name(randomLetter);
-  };
+  if (!user) return null;
 
   return (
-    <Box textAlign="center" mt={4} sx={{ bgcolor: 'background.default', minHeight: '100vh', p: 3, background: 'linear-gradient(to bottom right, #00ff00, #0000ff)' }}>
-      <Typography variant="h4" gutterBottom sx={{ fontFamily: '"Press Start 2P", cursive' }}>Kalah Lobby</Typography>
-      <Typography variant="h6" gutterBottom sx={{ fontFamily: '"Press Start 2P", cursive' }}>Players ( 2 / 2 )</Typography>
-      <Grid container spacing={4} justifyContent="center" alignItems="center">
-        <Grid item>
-          <Card sx={{ maxWidth: 300, boxShadow: 3 }}>
-            <CardHeader
-              avatar={<Typography variant="h6" sx={{ fontFamily: '"Press Start 2P", cursive' }}>👑</Typography>}
-              title={
-                <TextField
-                  variant="outlined"
-                  label="Player 1 Name"
-                  value={player1Name}
-                  onChange={(e) => setPlayer1Name(e.target.value)}
-                  fullWidth
-                  InputLabelProps={{ style: { fontFamily: '"Press Start 2P", cursive' } }}
-                  inputProps={{ style: { fontFamily: '"Press Start 2P", cursive' } }}
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      minHeight: '100vh', 
+      p: 3, 
+      background: 'linear-gradient(to bottom right, #00ff00, #0000ff)' 
+    }}>
+      <Typography variant="h3" gutterBottom sx={{ fontFamily: '"Press Start 2P", cursive', color: 'white', textShadow: '2px 2px 4px #000' }}>
+        Player Profile
+      </Typography>
+      
+      <Card sx={{ maxWidth: 600, width: '100%', p: 3, borderRadius: 4, boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
+        <CardContent>
+          <Grid container spacing={3} alignItems="center">
+            <Grid item xs={12} md={6} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Box sx={{ position: 'relative' }}>
+                <SafeAvatar 
+                  src={avatar} 
+                  fallbackSrc="/assets/1.png"
+                  sx={{ 
+                    width: 180, 
+                    height: 180, 
+                    border: '4px solid #3f51b5',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s',
+                    '&:hover': {
+                      transform: 'scale(1.05)'
+                    }
+                  }}
+                  onClick={handleAvatarClick}
                 />
-              }
-            />
-            <CardContent>
-              <Avatar
-                src={player1Avatar}
-                sx={{ width: 100, height: 100, cursor: 'pointer', mx: 'auto' }}
-                onClick={() => {
-                  setCurrentPlayer('player1');
-                  setShowSelectionDialog(true);
-                }}
+                {isUploading && (
+                  <Box sx={{ 
+                    position: 'absolute', 
+                    top: 0, 
+                    left: 0, 
+                    right: 0, 
+                    bottom: 0, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    borderRadius: '50%'
+                  }}>
+                    <CircularProgress />
+                  </Box>
+                )}
+              </Box>
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept="image/*"
+                onChange={handleFileChange}
               />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item>
-          <Card sx={{ maxWidth: 300, boxShadow: 3 }}>
-            <CardHeader
-              avatar={<Typography variant="h6" sx={{ fontFamily: '"Press Start 2P", cursive' }}>Player2</Typography>}
-              title={
-                <Box display="flex" alignItems="center">
-                  <TextField
-                    variant="outlined"
-                    label="Player 2 Name"
-                    value={player2Name}
-                    onChange={(e) => setPlayer2Name(e.target.value)}
-                    fullWidth
-                    InputLabelProps={{ style: { fontFamily: '"Press Start 2P", cursive' } }}
-                    inputProps={{ style: { fontFamily: '"Press Start 2P", cursive' } }}
-                  />
-                  <IconButton onClick={generateRandomName}>
-                    🎲
-                  </IconButton>
-                </Box>
-              }
-            />
-            <CardContent>
-              <Avatar
-                src={player2Avatar}
-                sx={{ width: 100, height: 100, cursor: 'pointer', mx: 'auto' }}
-                onClick={() => {
-                  setCurrentPlayer('player2');
-                  setShowSelectionDialog(true);
-                }}
+              <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+                Click to upload avatar (max 5MB)
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h5" gutterBottom sx={{ fontFamily: '"Press Start 2P", cursive' }}>
+                {user.username || 'Player'}
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Ready to play Kalah? Find a match and start playing!
+              </Typography>
+              <MatchmakingUI 
+                status={status} 
+                countdown={countdown} 
+                handleFindMatch={handleFindMatch} 
               />
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-      <Typography variant="subtitle1" mt={2} sx={{ fontFamily: '"Press Start 2P", cursive' }}>Let's play!</Typography>
-      <Box sx={{ mt: 3 }}>
-        <Card sx={{ maxWidth: 600, mx: 'auto', boxShadow: 3 }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ fontFamily: '"Press Start 2P", cursive' }}>Options</Typography>
-            <Box display="flex" alignItems="center" mt={2}>
-              <Typography variant="body1" mr={2} sx={{ fontFamily: '"Press Start 2P", cursive' }}>Start marbles</Typography>
-              <TextField
-                type="number"
-                value={startingSeeds}
-                onChange={(e) => setStartingSeeds(Number(e.target.value))}
-                inputProps={{ min: 1, style: { fontFamily: '"Press Start 2P", cursive' } }}
-              />
-            </Box>
-          </CardContent>
-        </Card>
-      </Box>
-      <Box sx={{ mt: 3 }}>
-        <Button variant="contained" color="primary" onClick={handleStartGame} sx={{ bgcolor: '#3498db', color: 'white', mr: 2, fontFamily: '"Press Start 2P", cursive' }}>
-          Start Game
-        </Button>
-      </Box>
-
-      <Dialog open={showSelectionDialog} onClose={() => setShowSelectionDialog(false)}>
-        <DialogTitle sx={{ fontFamily: '"Press Start 2P", cursive' }}>Select Avatar and Player Type</DialogTitle>
-        <DialogContent>
-          <AvatarSelection 
-            onSelect={handleAvatarSelect} 
-            onSelectType={handlePlayerTypeSelect} 
-            onCancel={() => setShowSelectionDialog(false)} 
-            showPlayerType={currentPlayer === 'player2'} 
-          />
-        </DialogContent>
-      </Dialog>
-
-      <AnnouncementPanel announcements={announcements} />
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+      
+      {/* 成功或错误提示 */}
+      <Snackbar 
+        open={openSnackbar} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={uploadError ? "error" : "success"} 
+          sx={{ width: '100%' }}
+        >
+          {uploadError || successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
